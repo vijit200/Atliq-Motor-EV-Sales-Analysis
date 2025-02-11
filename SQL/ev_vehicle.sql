@@ -179,6 +179,67 @@ ORDER BY s.Fiscal_year, s.Quater, quarterly_sales DESC;
 
 -- 5. How do the EV sales and penetration rates in Delhi compare to Karnataka for 2024?
 
-SELECT * FROM evData;
+SELECT 
+    state,
+    SUM(state_sales) AS EV_Sale,
+    (SUM(State_sales) / SUM(Total_vehicle_sold)) * 100 AS Penetration
+FROM
+    evData
+WHERE
+    (State = 'Delhi' OR State = 'Karnataka') AND Fiscal_year = 2024
+GROUP BY State;
 
+-- 6. List down the compounded annual growth rate (CAGR) in 4-wheeler units for the top 5 makers from 2022 to 2024.
 
+WITH EvSale AS(
+SELECT 
+    maker, fiscal_year, SUM(maker_sales) AS Total_EvSales
+FROM
+    evData
+WHERE Vehicle_category = "4-Wheelers" AND
+    Fiscal_year IN (2022 , 2023, 2024)
+GROUP BY Fiscal_year , maker),
+Sale AS (
+SELECT Maker ,MAX(CASE WHEN fiscal_year = 2022 THEN Total_EvSales ELSE 0 END ) AS Sale_2022 ,
+MAX(CASE WHEN fiscal_year = 2024 THEN Total_EvSales ELSE 0 END  ) AS Sale_2024 FROM EvSale GROUP BY Maker)
+SELECT 
+    Maker,
+    (Sale_2022 + Sale_2024) AS TOTAL_EV_SOLD,
+    ROUND((POWER(Sale_2024 / Sale_2022, 1 / 2) - 1) * 100,2) AS CAGR
+FROM
+    Sale
+WHERE
+    Sale_2022 > 0
+ORDER BY (Sale_2022 + Sale_2024) DESC
+LIMIT 5;
+
+-- 7. List down the top 10 states that had the highest compounded annual growth rate (CAGR) from 2022 to 2024 in total vehicles sold.
+
+WITH EVSales AS (
+SELECT 
+    state, fiscal_year, SUM(total_vehicle_sold) AS total_sales
+FROM
+    evData
+WHERE
+    FISCAL_YEAR IN (2022 , 2023, 2024)
+GROUP BY state , fiscal_year
+),
+Sales AS (
+SELECT 
+    State,
+    MAX(CASE
+        WHEN fiscal_year = 2022 THEN total_sales
+        ELSE 0
+    END) AS Sale_2022,
+    MAX(CASE
+        WHEN fiscal_year = 2024 THEN total_sales
+        ELSE 0
+    END) AS Sale_2024
+FROM
+    EVSales
+GROUP BY State)
+SELECT 
+	State,
+    (Sale_2022 + Sale_2024) AS TOTAL_EV_SOLD,
+    ROUND((POWER(Sale_2024 / Sale_2022, 1 / 2) - 1) * 100,2) AS CAGR
+FROM Sales WHERE Sale_2022 > 0 ORDER BY CAGR DESC  LIMIT 10;
