@@ -265,12 +265,16 @@ SELECT
 -- 9.	What is the projected number of EV sales (including 2-wheelers and 4-wheelers) for the top 10 states by penetration rate in 2030,
 --  based on the compounded annual growth rate (CAGR) from previous years? 
 
-WITH CTE AS (
+
+WITH newData AS(
 SELECT 
-    Fiscal_Year, State, SUM(STATE_SALES) AS total_Sales
+	State,
+   ( SUM(State_sales) / SUM(Total_vehicle_sold) ) * 100 AS Penetration_rate
 FROM
     evData
-GROUP BY Fiscal_year , State),
+GROUP BY  State ORDER BY Penetration_rate DESC LIMIT 10), newCte AS (
+SELECT e.Fiscal_year , e.State ,  e.state_sales , c.Penetration_rate FROM evData e JOIN newData c ON e.state = c.state ), CTE AS(
+SELECT Fiscal_year , State , SUM(state_sales) AS Total_sales FROM newCte GROUP BY State,Fiscal_year ),
 CAGR AS(
 SELECT 
     State,
@@ -283,7 +287,6 @@ FROM
 GROUP BY State)
 SELECT 
     State,
-    (final_year - initial_year) AS years,
     Initial_year,
     Final_year,
     (final_sales + initial_sales) AS Total_ev_sales,
@@ -292,8 +295,48 @@ ROUND((POW(final_sales / NULLIF(initial_sales, 0), 1.0 / NULLIF(final_year - ini
 ROUND(final_sales * POW(1 + (ROUND(POW(final_sales / NULLIF(initial_sales, 0), 1.0 / NULLIF(final_year - initial_year, 0)) - 1, 6)), (2030 - final_year)),2) AS projected_2030_sales
 FROM
     CAGR
-ORDER BY CAGR DESC
+ORDER BY projected_2030_sales DESC
 LIMIT 10;
 
--- 10.	Estimate the revenue growth rate of 4-wheeler and 2-wheelers EVs in India for 2022 vs 2024 and 2023 vs 2024, assuming an average unit price. 
+-- 10.	Estimate the revenue growth rate of 4-wheeler and 2-wheelers EVs in India for 2022 vs 2024 and 2023 vs 2024, assuming an average unit price
 
+WITH revenue_data AS (
+    SELECT 
+        Fiscal_year,
+        vehicle_category,
+        SUM(state_sales) AS total_units_sold,
+        CASE 
+            WHEN vehicle_category = '2-Wheelers' THEN SUM(state_sales) * 120000
+            WHEN vehicle_category = '4-Wheelers' THEN SUM(state_sales) * 1500000
+            ELSE 0
+        END AS revenue
+    FROM evData
+    WHERE Fiscal_year IN (2022, 2023, 2024)
+    GROUP BY Fiscal_year, vehicle_category
+),
+growth_calculations AS (
+    SELECT 
+        rd1.vehicle_category,
+        rd1.Fiscal_year AS year_1,
+        rd2.Fiscal_year AS year_2,
+        rd1.revenue AS revenue_year_1,
+        rd2.revenue AS revenue_year_2,
+        ((rd2.revenue - rd1.revenue) / rd1.revenue) * 100 AS growth_rate
+    FROM revenue_data rd1
+    JOIN revenue_data rd2 
+        ON rd1.vehicle_category = rd2.vehicle_category 
+        AND rd2.Fiscal_year = rd1.Fiscal_year + 2  -- For 2022-2024
+    UNION ALL
+    SELECT 
+        rd1.vehicle_category,
+        rd1.Fiscal_year AS year_1,
+        rd2.Fiscal_year AS year_2,
+        rd1.revenue AS revenue_year_1,
+        rd2.revenue AS revenue_year_2,
+        ((rd2.revenue - rd1.revenue) / rd1.revenue) * 100 AS growth_rate
+    FROM revenue_data rd1
+    JOIN revenue_data rd2 
+        ON rd1.vehicle_category = rd2.vehicle_category 
+        AND rd2.Fiscal_year = rd1.Fiscal_year + 1  -- For 2023-2024
+)
+SELECT * FROM growth_calculations WHERE year_1 in (2022,2023) AND year_2 = 2024;
