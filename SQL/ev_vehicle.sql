@@ -221,7 +221,8 @@ SELECT
 FROM
     evData
 WHERE
-    FISCAL_YEAR IN (2022 , 2023, 2024)
+    FISCAL_YEAR IN (2022 , 2023, 2024
+    )
 GROUP BY state , fiscal_year
 ),
 Sales AS (
@@ -340,3 +341,37 @@ growth_calculations AS (
         AND rd2.Fiscal_year = rd1.Fiscal_year + 1  -- For 2023-2024
 )
 SELECT * FROM growth_calculations WHERE year_1 in (2022,2023) AND year_2 = 2024;
+
+
+
+
+
+
+
+
+WITH MonthlySales AS (
+    SELECT 
+        MONTHNAME(date) AS `year_month`,
+        SUM(total_vehicle_sold) AS total_sales
+    FROM evData 
+    WHERE YEAR(date) BETWEEN 2022 AND 2024
+    GROUP BY `year_month`
+)
+SELECT * FROM MonthlySales;
+
+
+
+
+
+
+WITH CTE AS (
+SELECT 
+    State,
+    SUM(State_sales) AS Electric_Vehicle_Sold,
+    SUM(Total_vehicle_sold) AS Total_vechile_sold,
+    (SUM(State_sales)/SUM(Total_vehicle_sold))*100 As Penetration,
+    DENSE_RANK() OVER(ORDER BY (SUM(State_sales)/SUM(Total_vehicle_sold))*100 DESC ) AS penetration_rnk
+FROM
+    evData
+GROUP BY State) 
+SELECT State, Penetration,Total_vechile_sold, penetration_rnk FROM CTE ORDER BY penetration_rnk ASC limit 5;
