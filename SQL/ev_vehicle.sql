@@ -346,7 +346,7 @@ SELECT * FROM growth_calculations WHERE year_1 in (2022,2023) AND year_2 = 2024;
 
 
 
-
+-- -----------------------------------------------------------------------------------
 
 
 WITH MonthlySales AS (
@@ -367,11 +367,122 @@ SELECT * FROM MonthlySales;
 WITH CTE AS (
 SELECT 
     State,
+    vehicle_category,
+    SUM(State_sales) AS Electric_Vehicle_Sold,
+    SUM(Total_vehicle_sold) AS Total_vechile_sold,
+    (SUM(State_sales)/SUM(Total_vehicle_sold))*100 As Penetration,
+    DENSE_RANK() OVER(ORDER BY (SUM(State_sales)/SUM(Total_vehicle_sold))*100 DESC ) AS penetration_rnk
+FROM
+    evData 
+GROUP BY State , Vehicle_category) 
+SELECT AVG(Penetration),Vehicle_category As Avg_Penetration From CTE Group by Vehicle_Category;
+
+
+WITH CTE AS (
+SELECT 
+    State,
     SUM(State_sales) AS Electric_Vehicle_Sold,
     SUM(Total_vehicle_sold) AS Total_vechile_sold,
     (SUM(State_sales)/SUM(Total_vehicle_sold))*100 As Penetration,
     DENSE_RANK() OVER(ORDER BY (SUM(State_sales)/SUM(Total_vehicle_sold))*100 DESC ) AS penetration_rnk
 FROM
     evData
-GROUP BY State) 
-SELECT State, Penetration,Total_vechile_sold, penetration_rnk FROM CTE ORDER BY penetration_rnk ASC limit 5;
+GROUP BY State),
+last_year AS (SELECT 
+    State,
+    SUM(State_sales) AS Electric_Vehicle_Sold,
+    SUM(Total_vehicle_sold) AS Total_vechile_sold,
+    (SUM(State_sales)/SUM(Total_vehicle_sold))*100 As Penetration_lY,
+    DENSE_RANK() OVER(ORDER BY (SUM(State_sales)/SUM(Total_vehicle_sold))*100 DESC ) AS penetration_rnk
+FROM
+    evData WHERE Fiscal_year = 2024
+GROUP BY State),
+diff_year AS (SELECT c.State , c.Penetration , ls.Penetration_ly , (ls.Penetration_ly - c.Penetration) AS Diff_penetration  FROM CTE AS c JOIN last_year ls ON c.State = ls.State)
+SELECT * from diff_year; 
+
+SELECT State , Sum(State_sales) As total_Sales from evData Where (State = "Karnataka" or State = "Delhi") GROUP BY State;
+
+
+ --  CAGR OF TOP 10 MAKER
+WITH EvSale AS(
+SELECT 
+    maker, fiscal_year, SUM(maker_sales) AS Total_EvSales
+FROM
+    evData
+WHERE 
+    Fiscal_year IN (2022 , 2023, 2024)
+GROUP BY Fiscal_year , maker),
+Sale AS (
+SELECT Maker ,MAX(CASE WHEN fiscal_year = 2022 THEN Total_EvSales ELSE 0 END ) AS Sale_2022 ,
+MAX(CASE WHEN fiscal_year = 2024 THEN Total_EvSales ELSE 0 END  ) AS Sale_2024 FROM EvSale GROUP BY Maker)
+SELECT 
+    Maker,
+    (Sale_2022 + Sale_2024) AS TOTAL_EV_SOLD,
+    ROUND((POWER(Sale_2024 / Sale_2022, 1 / 2) - 1) * 100,2) AS CAGR
+FROM
+    Sale
+WHERE
+    Sale_2022 > 0
+ORDER BY CAGR DESC
+LIMIT 10;
+
+
+WITH EvSale AS(
+SELECT 
+    state, fiscal_year, SUM(state_sales) AS Total_EvSales
+FROM
+    evData
+WHERE 
+    Fiscal_year IN (2022 , 2023, 2024)
+GROUP BY Fiscal_year , state),
+Sale AS (
+SELECT state ,MAX(CASE WHEN fiscal_year = 2022 THEN Total_EvSales ELSE 0 END ) AS Sale_2022 ,
+MAX(CASE WHEN fiscal_year = 2024 THEN Total_EvSales ELSE 0 END  ) AS Sale_2024 FROM EvSale GROUP BY state)
+SELECT 
+    state,
+    (Sale_2022 + Sale_2024) AS TOTAL_EV_SOLD,
+    ROUND((POWER(Sale_2024 / Sale_2022, 1 / 2) - 1) * 100,2) AS CAGR
+FROM
+    Sale
+WHERE
+    Sale_2022 > 0
+ORDER BY CAGR DESC
+LIMIT 10;
+
+
+SELECT 
+    maker,vehicle_category,
+    SUM(
+        CASE 
+            WHEN vehicle_category = '2-Wheelers' THEN Maker_sales * 120000
+            WHEN vehicle_category = '4-Wheelers' THEN Maker_sales * 1500000
+            ELSE 0
+        END
+    ) AS revenue
+FROM evData
+GROUP BY maker,vehicle_category
+ORDER BY revenue DESC;
+
+SELECT SUM(total_vehicle_sold) AS total_electric_vehicles_sold
+FROM (
+    SELECT DISTINCT date, state, vehicle_category, total_vehicle_sold
+    FROM evData
+) AS unique_sales;
+
+select sum(total_vehicle_sold) from evData;
+select * from evData;
+SELECT SUM(maker_sales) AS total_electric_vehicles_sold
+FROM (
+    SELECT DISTINCT date, maker, vehicle_category, maker_sales
+    FROM evData
+) AS unique_sales;
+
+
+WITH CTE AS
+(SELECT 
+    maker,vehicle_category,
+    SUM(maker_sales) AS Total_2Wheeler_Sales
+FROM
+    evData
+GROUP BY maker,vehicle_category) 
+SELECT  Maker ,vehicle_category, Total_2Wheeler_Sales  FROM CTE order by Total_2Wheeler_Sales ASC;
