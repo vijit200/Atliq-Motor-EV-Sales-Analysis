@@ -406,25 +406,24 @@ SELECT State , Sum(State_sales) As total_Sales from evData Where (State = "Karna
  --  CAGR OF TOP 10 MAKER
 WITH EvSale AS(
 SELECT 
-    maker, fiscal_year, SUM(maker_sales) AS Total_EvSales
+    maker, fiscal_year,vehicle_category, SUM(maker_sales) AS Total_EvSales
 FROM
     evData
 WHERE 
     Fiscal_year IN (2022 , 2023, 2024)
-GROUP BY Fiscal_year , maker),
+GROUP BY Fiscal_year , maker,vehicle_category),
 Sale AS (
-SELECT Maker ,MAX(CASE WHEN fiscal_year = 2022 THEN Total_EvSales ELSE 0 END ) AS Sale_2022 ,
-MAX(CASE WHEN fiscal_year = 2024 THEN Total_EvSales ELSE 0 END  ) AS Sale_2024 FROM EvSale GROUP BY Maker)
+SELECT Maker,vehicle_category ,MAX(CASE WHEN fiscal_year = 2022 THEN Total_EvSales ELSE 0 END ) AS Sale_2022 ,
+MAX(CASE WHEN fiscal_year = 2024 THEN Total_EvSales ELSE 0 END  ) AS Sale_2024 FROM EvSale GROUP BY Maker,vehicle_category)
 SELECT 
-    Maker,
+    Maker,vehicle_category,
     (Sale_2022 + Sale_2024) AS TOTAL_EV_SOLD,
     ROUND((POWER(Sale_2024 / Sale_2022, 1 / 2) - 1) * 100,2) AS CAGR
 FROM
     Sale
 WHERE
     Sale_2022 > 0
-ORDER BY CAGR DESC
-LIMIT 10;
+ORDER BY CAGR DESC;
 
 
 WITH EvSale AS(
@@ -486,3 +485,111 @@ FROM
     evData
 GROUP BY maker,vehicle_category) 
 SELECT  Maker ,vehicle_category, Total_2Wheeler_Sales  FROM CTE order by Total_2Wheeler_Sales ASC;
+
+
+
+SELECT 
+    (SUM(State_sales) * 1.0 / SUM(total_vehicle_sold)) * 100 AS avg_ev_penetration_rate
+FROM 
+    evData; 
+    
+WITH newData AS(
+SELECT 
+	State,
+   ( SUM(State_sales) / SUM(Total_vehicle_sold) ) * 100 AS Penetration_rate
+FROM
+    evData
+GROUP BY  State ORDER BY Penetration_rate DESC LIMIT 10), newCte AS (
+SELECT e.Fiscal_year , e.State ,e.vehicle_category,  e.state_sales , c.Penetration_rate FROM evData e JOIN newData c ON e.state = c.state ), CTE AS(
+SELECT Fiscal_year , State ,vehicle_category, SUM(state_sales) AS Total_sales FROM newCte GROUP BY State,Fiscal_year,vehicle_category ),
+CAGR AS(
+SELECT 
+    State,
+    MIN(Fiscal_year) AS Initial_year,
+    MAX(Fiscal_year) AS Final_year,
+	SUM(CASE WHEN Fiscal_year = 2022 THEN total_sales ELSE 0 END) AS initial_sales,
+    SUM(CASE WHEN Fiscal_year = 2024 THEN total_sales ELSE 0 END) AS final_sales
+FROM
+    CTE
+GROUP BY State),Pr_sale AS (
+SELECT 
+    State,
+    Initial_year,
+    Final_year,
+    (final_sales + initial_sales) AS Total_ev_sales,
+ROUND((POW(final_sales / NULLIF(initial_sales, 0), 1.0 / NULLIF(final_year - initial_year, 0)) - 1) *100, 2) AS CAGR,
+-- Projected Sales=Latest Sales×(1+CAGR) ^ years to 2030
+ROUND(final_sales * POW(1 + (ROUND(POW(final_sales / NULLIF(initial_sales, 0), 1.0 / NULLIF(final_year - initial_year, 0)) - 1, 6)), (2030 - final_year)),2) AS projected_2030_sales
+FROM
+    CAGR
+ORDER BY projected_2030_sales DESC)
+SELECT SUM(projected_2030_sales) FROM Pr_sale;
+
+SELECT State , vehicle_category ,fiscal_year, Sum(State_sales) As total_Sales from evData Where (State = "Karnataka" or State = "Delhi") GROUP BY State, vehicle_category,fiscal_year;
+
+SELECT 
+    state,
+    SUM(state_sales) AS EV_Sale,
+    (SUM(State_sales) / SUM(Total_vehicle_sold)) * 100 AS Penetration
+FROM
+    evData
+WHERE
+    (State = 'Delhi' OR State = 'Karnataka')
+GROUP BY State;
+
+
+
+
+WITH newData AS(
+SELECT 
+	Maker,
+   ( SUM(maker_sales) / SUM(Total_vehicle_sold) ) * 100 AS Penetration_rate
+FROM
+    evData
+GROUP BY  Maker ORDER BY Penetration_rate DESC LIMIT 10), newCte AS (
+SELECT e.Fiscal_year , e.Maker ,e.vehicle_category,  e.maker_saless , c.Penetration_rate FROM evData e JOIN newData c ON e.Maker = c.Maker ), CTE AS(
+SELECT Fiscal_year , Maker ,vehicle_category, SUM(maker_sales) AS Total_sales FROM newCte GROUP BY Maker,Fiscal_year,vehicle_category ),
+CAGR AS(
+SELECT 
+    Maker,
+    MIN(Fiscal_year) AS Initial_year,
+    MAX(Fiscal_year) AS Final_year,
+	SUM(CASE WHEN Fiscal_year = 2022 THEN total_sales ELSE 0 END) AS initial_sales,
+    SUM(CASE WHEN Fiscal_year = 2024 THEN total_sales ELSE 0 END) AS final_sales
+FROM
+    CTE
+GROUP BY Maker),Pr_sale AS (
+SELECT 
+    Maker,
+    Initial_year,
+    Final_year,
+    (final_sales + initial_sales) AS Total_ev_sales,
+ROUND((POW(final_sales / NULLIF(initial_sales, 0), 1.0 / NULLIF(final_year - initial_year, 0)) - 1) *100, 2) AS CAGR,
+-- Projected Sales=Latest Sales×(1+CAGR) ^ years to 2030
+ROUND(final_sales * POW(1 + (ROUND(POW(final_sales / NULLIF(initial_sales, 0), 1.0 / NULLIF(final_year - initial_year, 0)) - 1, 6)), (2030 - final_year)),2) AS projected_2030_sales
+FROM
+    CAGR
+ORDER BY projected_2030_sales DESC)
+SELECT SUM(projected_2030_sales) FROM Pr_sale;
+
+
+WITH EvSale AS(
+SELECT 
+    maker,vehicle_category, fiscal_year, SUM(maker_sales) AS Total_EvSales
+FROM
+    evData
+WHERE
+    Fiscal_year IN (2022 , 2023, 2024)
+GROUP BY Fiscal_year , maker,vehicle_category),
+Sale AS (
+SELECT Maker ,vehicle_category,MAX(CASE WHEN fiscal_year = 2022 THEN Total_EvSales ELSE 0 END ) AS Sale_2022 ,
+MAX(CASE WHEN fiscal_year = 2024 THEN Total_EvSales ELSE 0 END  ) AS Sale_2024 FROM EvSale GROUP BY Maker,vehicle_category)
+SELECT 
+    Maker,vehicle_category,
+    (Sale_2022 + Sale_2024) AS TOTAL_EV_SOLD,
+    ROUND((POWER(Sale_2024 / Sale_2022, 1 / 2) - 1) * 100,2) AS CAGR
+FROM
+    Sale
+WHERE
+    Sale_2022 > 0
+ORDER BY (Sale_2022 + Sale_2024) DESC;
